@@ -1,6 +1,7 @@
 import {App, PluginSettingTab, Setting} from "obsidian";
 import MyPlugin from "./main";
 
+//[note]interface : オブジェクトのようなもの
 export interface MyPluginSettings {
 	mySetting: string;
 }
