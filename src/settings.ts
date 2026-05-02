@@ -32,5 +32,6 @@ export class SampleSettingTab extends PluginSettingTab {
 					this.plugin.settings.mySetting = value;
 					await this.plugin.saveSettings();
 				}));
+
 	}
 }
