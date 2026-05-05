@@ -1,18 +1,29 @@
 import {App, Editor, MarkdownView, Modal, Notice, Plugin} from 'obsidian';
 import {DEFAULT_SETTINGS, MyPluginSettings,VoiceMemoImporterSettingTab} from "./settings";
+import * as fs from "fs";
+import OpenAI from "openai";
 
 // Remember to rename these classes and interfaces!
 
 export default class MyPlugin extends Plugin {
-	settings: MyPluginSettings;
+	settings!: MyPluginSettings;
 
 	async onload() {
 		await this.loadSettings();
 
+		const input_dir = this.settings.input_dir;
+		const key_for_APIkey = this.settings.key_for_APIkey
 		// This creates an icon in the left ribbon.
 		this.addRibbonIcon('dice', 'Sample', (evt: MouseEvent) => {
 			// リボンアイコンが押されたときの処理を記載
-			new Notice('This is a notice!');
+			new Notice('音声ファイルの文字起こしを開始します');
+
+			//input_dir にある音声ファイルを取得
+			const voiceData = getVoiceMemoStream(input_dir);
+			//
+			const 
+
+
 		});
 
 		// This adds a status bar item to the bottom of the app. Does not work on mobile apps.
@@ -96,4 +107,26 @@ class SampleModal extends Modal {
 		const {contentEl} = this;
 		contentEl.empty();
 	}
+
+}
+
+	//呼び出し側でループさせるため、１件処理を前提とする。（後続のメソッドも同様）
+	export function getVoiceMemoStream(input_dir : string): fs.ReadStream{
+
+		if(!fs.existsSync(input_dir)){
+			//todo : エラーで返す？そのまま終了させる？
+			throw new Error("ファイルが存在しません")
+		}
+
+		return fs.createReadStream(input_dir);
+	}
+
+	async function transcribe(readstream : fs.ReadStream): Promise<string> {
+  		const transcription = await OpenAI.audio.transcriptions.create({
+    	file: readstream,
+    	model: "gpt-4o-transcribe",
+		prompt:"日本語による音声メモです。「えっと」や「あー」などのフィラーは除去してください"
+  	});
+
+  	return transcription.text;
 }

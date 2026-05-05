@@ -26,5 +26,8 @@
 	},
 	"include": [
 		"src/**/*.ts"
-	]
+	],
+	"compilerOptions": {
+    "types": ["node"]
+  }
 }
