@@ -1,7 +1,9 @@
-import { App, Editor, MarkdownView, Modal, Notice, Plugin } from 'obsidian';
+import { App, Editor, MarkdownView, Modal, Notice, Plugin, MarkdownFileInfo } from 'obsidian';
 import { DEFAULT_SETTINGS, MyPluginSettings, VoiceMemoImporterSettingTab } from "./settings.js";
-import * as fs from "fs";
+import * as fsSync from "fs";
+import { promises as fs } from "fs";
 import OpenAI from "openai";
+import path from "path";
 
 // Remember to rename these classes and interfaces!
 
@@ -11,19 +13,24 @@ export default class MyPlugin extends Plugin {
 	async onload() {
 		await this.loadSettings();
 
-		const input_dir = this.settings.input_dir;
+		const input_folder = this.settings.input_dir;
 		const key_for_APIkey = this.settings.key_for_APIkey
 		// This creates an icon in the left ribbon.
-		this.addRibbonIcon('dice', 'Sample', (evt: MouseEvent) => {
+		this.addRibbonIcon('dice', 'Sample', async(evt: MouseEvent) => {
 			// リボンアイコンが押されたときの処理を記載
 			new Notice('音声ファイルの文字起こしを開始します');
+
+			//フォルダ内のファイルのパスを１件とって来る
 
 			//input_dir にある音声ファイルを取得
 			const voiceStream = getVoiceMemoStream(input_dir);
 			//音声ファイルから文字起こしデータを取得
-			const transcript = transcribe(voiceStream);
-
-
+			const transcript = await transcribe(voiceStream);
+			//取得したデータをもとにmdファイル作成
+			await saveMemo(transcript);
+			//mdファイルをvoicememoフォルダに配置する。なければフォルダを作る
+			//処理済み音声ファイルを処理済みフォルダに移動。なければフォルダを作る
+			//ポップアップ表示
 
 		});
 
@@ -43,8 +50,8 @@ export default class MyPlugin extends Plugin {
 		this.addCommand({
 			id: 'replace-selected',
 			name: 'Replace selected content',
-			editorCallback: (editor: Editor, view: MarkdownView) => {
-				editor.replaceSelection('Sample editor command');
+			editorCallback: (editor: Editor, ctx: MarkdownView | MarkdownFileInfo) => {
+				console.log(editor.getSelection());
 			}
 		});
 		// This adds a complex command that can check whether the current state of the app allows execution of the command
@@ -111,24 +118,41 @@ class SampleModal extends Modal {
 
 }
 
+//設定画面から入力したフォルダのファイルパスを１件とって来る
+export function getOneVoiceFilePath(inputDir: string): string {
+  if (!fsSync.existsSync(inputDir)) {
+    throw new Error("フォルダが存在しません");
+  }
+
+  const files = fsSync.readdirSync(inputDir);
+
+  if (files.length === 0) {
+    throw new Error("フォルダにファイルがありません");
+  }
+
+  // とりあえず1件目
+  const fileName = files[0] as string;
+  return path.join(inputDir, fileName);
+}
+
 //呼び出し側でループさせるため、１件処理を前提とする。（後続のメソッドも同様）
 //〇ファイル自体を示すパス
 //×ファイルが存在するフォルダのパス
-export function getVoiceMemoStream(input_dir: string): fs.ReadStream {
+export function getVoiceMemoStream(input_dir: string): fsSync.ReadStream {
 
-	if (!fs.existsSync(input_dir)) {
+	if (!fsSync.existsSync(input_dir)) {
 		//todo : エラーで返す？そのまま終了させる？
 		throw new Error("ファイルが存在しません")
 	}
 
-	return fs.createReadStream(input_dir);
+	return fsSync.createReadStream(input_dir);
 }
 
 //[note]Promise→すぐには値が返ってこないJSON形式のレスポンスに対して、結果と値を格納したオブジェクト
-async function transcribe(readstream: fs.ReadStream): Promise<string> {
+async function transcribe(readstream: fsSync.ReadStream): Promise<string> {
 
 	const client = new OpenAI({
-  		apiKey: process.env.OPENAI_API_KEY,
+		apiKey: process.env.OPENAI_API_KEY,
 	});
 	const transcription = await client.audio.transcriptions.create({
 		file: readstream,
@@ -137,5 +161,44 @@ async function transcribe(readstream: fs.ReadStream): Promise<string> {
 	});
 
 	return transcription.text;
+}
+
+
+function formatDate(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}${m}${d}`; // 例: 20260506
+}
+
+async function getUniqueFilePath(dir: string, baseName: string): Promise<string> {
+  let fileName = `${baseName}.md`;
+  let filePath = path.join(dir, fileName);
+  let count = 1;
+
+  while (true) {
+    try {
+      await fs.access(filePath);
+      // 存在する → 次の候補
+      fileName = `${baseName}_${count}.md`;
+      filePath = path.join(dir, fileName);
+      count++;
+    } catch {
+      // 存在しない → これを使う
+      return filePath;
+    }
+  }
+}
+
+export async function saveMemo(transcript: string) {
+  const output_dir = "voiceMemo";
+  await fs.mkdir(output_dir, { recursive: true });
+
+  const dateStr = formatDate(new Date());
+  const filePath = await getUniqueFilePath(output_dir, dateStr);
+
+  const mdContent = `# ${dateStr}\n\n${transcript}`;
+
+  await fs.writeFile(filePath, mdContent, "utf-8");
 }
 
