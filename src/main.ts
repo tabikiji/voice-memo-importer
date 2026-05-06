@@ -21,11 +21,11 @@ export default class MyPlugin extends Plugin {
 			new Notice('音声ファイルの文字起こしを開始します');
 
 			//フォルダ内のファイルのパスを１件とって来る
-
+			const input_dir = getOneVoiceFilePath(input_folder);
 			//input_dir にある音声ファイルを取得
 			const voiceStream = getVoiceMemoStream(input_dir);
 			//音声ファイルから文字起こしデータを取得
-			const transcript = await transcribe(voiceStream);
+			const transcript = await transcribe(voiceStream,key_for_APIkey);
 			//取得したデータをもとにmdファイル作成
 			await saveMemo(transcript);
 			//mdファイルをvoicememoフォルダに配置する。なければフォルダを作る
@@ -149,10 +149,10 @@ export function getVoiceMemoStream(input_dir: string): fsSync.ReadStream {
 }
 
 //[note]Promise→すぐには値が返ってこないJSON形式のレスポンスに対して、結果と値を格納したオブジェクト
-async function transcribe(readstream: fsSync.ReadStream): Promise<string> {
+async function transcribe(readstream: fsSync.ReadStream,APIkey : string): Promise<string> {
 
 	const client = new OpenAI({
-		apiKey: process.env.OPENAI_API_KEY,
+		apiKey: APIkey
 	});
 	const transcription = await client.audio.transcriptions.create({
 		file: readstream,
