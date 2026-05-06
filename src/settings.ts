@@ -1,5 +1,5 @@
 import {App, PluginSettingTab, SecretComponent, Setting} from "obsidian";
-import MyPlugin from "./main";
+import MyPlugin from "./main.js";
 
 //[note]interface : 「この変数は設定されていないといけない」という制約。
 //[note]設定が必要そうな項目はここに書く

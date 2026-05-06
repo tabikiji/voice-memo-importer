@@ -1,5 +1,5 @@
-import {App, Editor, MarkdownView, Modal, Notice, Plugin} from 'obsidian';
-import {DEFAULT_SETTINGS, MyPluginSettings,VoiceMemoImporterSettingTab} from "./settings";
+import { App, Editor, MarkdownView, Modal, Notice, Plugin } from 'obsidian';
+import { DEFAULT_SETTINGS, MyPluginSettings, VoiceMemoImporterSettingTab } from "./settings.js";
 import * as fs from "fs";
 import OpenAI from "openai";
 
@@ -19,9 +19,10 @@ export default class MyPlugin extends Plugin {
 			new Notice('音声ファイルの文字起こしを開始します');
 
 			//input_dir にある音声ファイルを取得
-			const voiceData = getVoiceMemoStream(input_dir);
-			//
-			const 
+			const voiceStream = getVoiceMemoStream(input_dir);
+			//音声ファイルから文字起こしデータを取得
+			const transcript = transcribe(voiceStream);
+
 
 
 		});
@@ -99,34 +100,42 @@ class SampleModal extends Modal {
 	}
 
 	onOpen() {
-		let {contentEl} = this;
+		let { contentEl } = this;
 		contentEl.setText('Woah!');
 	}
 
 	onClose() {
-		const {contentEl} = this;
+		const { contentEl } = this;
 		contentEl.empty();
 	}
 
 }
 
-	//呼び出し側でループさせるため、１件処理を前提とする。（後続のメソッドも同様）
-	export function getVoiceMemoStream(input_dir : string): fs.ReadStream{
+//呼び出し側でループさせるため、１件処理を前提とする。（後続のメソッドも同様）
+//〇ファイル自体を示すパス
+//×ファイルが存在するフォルダのパス
+export function getVoiceMemoStream(input_dir: string): fs.ReadStream {
 
-		if(!fs.existsSync(input_dir)){
-			//todo : エラーで返す？そのまま終了させる？
-			throw new Error("ファイルが存在しません")
-		}
-
-		return fs.createReadStream(input_dir);
+	if (!fs.existsSync(input_dir)) {
+		//todo : エラーで返す？そのまま終了させる？
+		throw new Error("ファイルが存在しません")
 	}
 
-	async function transcribe(readstream : fs.ReadStream): Promise<string> {
-  		const transcription = await OpenAI.audio.transcriptions.create({
-    	file: readstream,
-    	model: "gpt-4o-transcribe",
-		prompt:"日本語による音声メモです。「えっと」や「あー」などのフィラーは除去してください"
-  	});
-
-  	return transcription.text;
+	return fs.createReadStream(input_dir);
 }
+
+//[note]Promise→すぐには値が返ってこないJSON形式のレスポンスに対して、結果と値を格納したオブジェクト
+async function transcribe(readstream: fs.ReadStream): Promise<string> {
+
+	const client = new OpenAI({
+  		apiKey: process.env.OPENAI_API_KEY,
+	});
+	const transcription = await client.audio.transcriptions.create({
+		file: readstream,
+		model: "gpt-4o-transcribe",
+		prompt: "日本語による音声メモです。「えっと」や「あー」などのフィラーは除去してください"
+	});
+
+	return transcription.text;
+}
+
